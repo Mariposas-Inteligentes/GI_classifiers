@@ -12,7 +12,7 @@ NUM_CLASSES = 5
 PRETRAINED = True  
 LR = 0.0001  
 BATCH_SIZE = 32  
-EPOCHS = 16
+EPOCHS = 5
 DEVICE = 'cuda' if torch.cuda.is_available() else 'cpu'
 
 
