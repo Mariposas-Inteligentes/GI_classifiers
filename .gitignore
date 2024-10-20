@@ -1,6 +1,7 @@
 # Data
 kvasir-dataset-v2.zip
 data
+split_data
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
