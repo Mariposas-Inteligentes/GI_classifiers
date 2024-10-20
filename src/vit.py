@@ -22,11 +22,8 @@ transform = transforms.Compose([
 ])
 
 
-train_dataset = datasets.ImageFolder('../data', transform=transform)
-
-train_size = int(0.8 * len(train_dataset))
-test_size = len(train_dataset) - train_size
-train_dataset, test_dataset = random_split(train_dataset, [train_size, test_size])
+train_dataset = datasets.ImageFolder('../split_data/train', transform=transform)
+test_dataset = datasets.ImageFolder('../split_data/test', transform=transform)
 
 train_loader = DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=True)
 test_loader = DataLoader(test_dataset, batch_size=BATCH_SIZE, shuffle=False)
