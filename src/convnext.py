@@ -14,7 +14,7 @@ LR = 0.0001
 BATCH_SIZE = 32  
 EPOCHS = 5
 DEVICE = 'cuda' if torch.cuda.is_available() else 'cpu'
-
+print(f'Using device {DEVICE}')
 
 transform = transforms.Compose([
     transforms.Resize((224, 224)),
