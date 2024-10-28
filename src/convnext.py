@@ -76,7 +76,6 @@ def test_convnext(model, test_loader):
     model.eval()
     all_preds = []
     all_labels = []
-
     dictionary = {}
     
     with torch.no_grad():
@@ -96,17 +95,15 @@ def test_convnext(model, test_loader):
 
     return dictionary
 
-convnext_model = ConvNeXtModel(NUM_CLASSES).to(DEVICE)
-
 def train_test(path):
+    convnext_model = ConvNeXtModel(NUM_CLASSES).to(DEVICE)
+
     train_dataset = datasets.ImageFolder(f'../cross_splitted/{path}/train', transform=transform)
     test_dataset = datasets.ImageFolder(f'../cross_splitted/{path}/test', transform=transform)
-
     train_loader = DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=True)
     test_loader = DataLoader(test_dataset, batch_size=BATCH_SIZE, shuffle=False)
 
     dictionary = {}
-
     dictionary['train'] = train_convnext(convnext_model, train_loader)
     dictionary['test'] = test_convnext(convnext_model, test_loader)
 
