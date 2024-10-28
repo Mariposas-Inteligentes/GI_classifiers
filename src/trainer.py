@@ -1,7 +1,7 @@
 import torch
 import torchvision
 import numpy as np
-
+import csv
 
 from sklearn.metrics import confusion_matrix
 from torch.utils.data import DataLoader
@@ -30,6 +30,13 @@ def macro_specificity_score(y_true, y_pred):
 
     macro_specificity = np.mean(specificity_per_class)
     return macro_specificity
+
+def append_results_to_csv(file_path, k, y_true, y_pred, training):
+    with open(file_path, mode='a', newline='') as file:
+        writer = csv.writer(file)
+        
+        for true_value, pred_value in zip(y_true, y_pred):
+            writer.writerow([k, true_value, pred_value, training])
 
 '''
 ViT Functions _______________________________________________________________
@@ -73,7 +80,7 @@ def train_vit(model, train_loader, epochs, lr, device):
     dictionary['recall'] = recall
     dictionary['specificity'] = specificity
 
-    return dictionary
+    return dictionary, all_preds, all_labels
 
 def test_vit(model, test_loader, device):
     model.eval()
@@ -100,10 +107,10 @@ def test_vit(model, test_loader, device):
     dictionary['accuracy'] = accuracy
     dictionary['recall'] = recall
     dictionary['specificity'] = specificity
+    
+    return dictionary, all_preds, all_labels
 
-    return dictionary
-
-def train_test_vit(path, num_classes, device, transform, batch_size, epochs, lr):
+def train_test_vit(path, num_classes, device, transform, batch_size, epochs, lr, k):
     vit_model = VitBase16(num_classes=num_classes, device=device).to(device)
 
     train_dataset = datasets.ImageFolder(f'../cross_splitted/{path}/train', transform=transform)
@@ -112,8 +119,11 @@ def train_test_vit(path, num_classes, device, transform, batch_size, epochs, lr)
     test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
 
     dictionary = {}
-    dictionary['train'] = train_vit(vit_model, train_loader, device=device, epochs=epochs, lr=lr)
-    dictionary['test'] = test_vit(vit_model, test_loader, device=device)
+    dictionary['train'], all_preds, all_labels = train_vit(vit_model, train_loader, device=device, epochs=epochs, lr=lr)
+    append_results_to_csv('../results/vit_results.csv', k, all_labels, all_preds, 1)
+
+    dictionary['test'], all_preds, all_labels = test_vit(vit_model, test_loader, device=device)
+    append_results_to_csv('../results/vit_results.csv', k, all_labels, all_preds, 0)
 
     return dictionary
 
@@ -136,8 +146,8 @@ def cross_validate_vit(k):
     )
 
     values = []
-    for i in range(1, 6):
-        print(f'Training and Testing #{i}')
+    for i in range(1, k+1):
+        print(f'Training and Testing fold #{i}')
         values.append
         (
             train_test_vit
@@ -148,7 +158,8 @@ def cross_validate_vit(k):
                 transform=transform,
                 batch_size=BATCH_SIZE,
                 epochs=EPOCHS,
-                lr=LR
+                lr=LR,
+                k=i
             )
         )
 
@@ -260,7 +271,6 @@ def cross_validate_convnext(k):
     LR = 0.0001  
     BATCH_SIZE = 32  
     EPOCHS = 2
-    REPETITIONS = 5
     DEVICE = 'cuda' if torch.cuda.is_available() else 'cpu'
     print(f'Using device {DEVICE} for ConvNeXt')
 
@@ -275,7 +285,7 @@ def cross_validate_convnext(k):
 
     values = []
     for i in range(1, 6):
-        print(f'\nTraining and Testing #{i}')
+        print(f'\nTraining and Testing fold #{i}')
         values.append
         (
             train_test_convnext
@@ -306,11 +316,11 @@ def cross_validate_convnext(k):
         print(f'\nAverage {metrics[j]} for testing: {average_test[j]}')
 
 '''
-General functions
+Execution
 '''
 
 def main():
-    cross_validate_vit(k=5)
+    cross_validate_vit(k=1)
 
 
 if __name__ == "__main__":
