@@ -2,9 +2,9 @@ import torch.nn as nn
 from torchvision import models
 from torchvision.models import ConvNeXt_Tiny_Weights
 
-class ConvNeXtModel(nn.Module):
+class ConvNeXtTiny(nn.Module):
     def __init__(self, num_classes):
-        super(ConvNeXtModel, self).__init__()
+        super(ConvNeXtTiny, self).__init__()
         self.model = models.convnext_tiny(weights=ConvNeXt_Tiny_Weights.DEFAULT)  
         self.model.classifier[2] = nn.Linear(self.model.classifier[2].in_features, num_classes)  
 

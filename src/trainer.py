@@ -11,7 +11,7 @@ from sklearn.metrics import accuracy_score
 from sklearn.metrics import recall_score
 
 from vit import VitBase16
-from convnext import ConvNeXtModel
+from convnext import ConvNeXtTiny
 
 
 '''
@@ -31,25 +31,25 @@ def macro_specificity_score(y_true, y_pred):
     macro_specificity = np.mean(specificity_per_class)
     return macro_specificity
 
-def append_results_to_csv(file_path, k, y_true, y_pred, training):
+def append_results_to_csv(file_path, k, y_true, y_pred):
     with open(file_path, mode='a', newline='') as file:
         writer = csv.writer(file)
         
         for true_value, pred_value in zip(y_true, y_pred):
-            writer.writerow([k, true_value, pred_value, training])
+            writer.writerow([k, true_value, pred_value])
 
 '''
 ViT Functions _______________________________________________________________
 '''
 
 def train_vit(model, train_loader, epochs, lr, device):
+    model.train()
     optimizer = torch.optim.AdamW(model.parameters(), lr=lr)
     loss_fn = nn.CrossEntropyLoss()
     
     dictionary = {}
 
     for epoch in range(epochs):
-        model.train()
         running_loss = 0.0
         all_preds = []
         all_labels = []
@@ -120,10 +120,10 @@ def train_test_vit(path, num_classes, device, transform, batch_size, epochs, lr,
 
     dictionary = {}
     dictionary['train'], all_preds, all_labels = train_vit(vit_model, train_loader, device=device, epochs=epochs, lr=lr)
-    append_results_to_csv('../results/vit_results.csv', k, all_labels, all_preds, 1)
+    append_results_to_csv('../results/vit_training.csv', k, all_labels, all_preds)
 
     dictionary['test'], all_preds, all_labels = test_vit(vit_model, test_loader, device=device)
-    append_results_to_csv('../results/vit_results.csv', k, all_labels, all_preds, 0)
+    append_results_to_csv('../results/vit_testing.csv', k, all_labels, all_preds)
 
     return dictionary
 
@@ -132,7 +132,7 @@ def cross_validate_vit(k):
     NUM_CLASSES = 5
     LR = 0.0001  
     BATCH_SIZE = 32  
-    EPOCHS = 4
+    EPOCHS = 1
     DEVICE = 'cuda' if torch.cuda.is_available() else 'cpu'
     print(f'Using device {DEVICE} for ViT')
 
@@ -148,28 +148,15 @@ def cross_validate_vit(k):
     values = []
     for i in range(1, k+1):
         print(f'Training and Testing fold #{i}')
-        values.append
-        (
-            train_test_vit
-            (
-                path=f'fold_{i}', 
-                num_classes=NUM_CLASSES,
-                device=DEVICE,
-                transform=transform,
-                batch_size=BATCH_SIZE,
-                epochs=EPOCHS,
-                lr=LR,
-                k=i
-            )
-        )
-
+        value = train_test_vit(path=f'fold_{i}', num_classes=NUM_CLASSES, device=DEVICE, transform=transform, batch_size=BATCH_SIZE, epochs=EPOCHS, lr=LR, k=i)
+        values.append(value)
 
     metrics = ['accuracy', 'recall', 'specificity']
     average_train = [0] * len(metrics)
     average_test = [0] * len(metrics)
 
     for j in range(len(metrics)):
-        for i in range(len(values)):    
+        for i in range(len(values)):
             average_train[j] += values[i]['train'][metrics[j]]
             average_test[j] += values[i]['test'][metrics[j]]
         average_train[j] /= k
@@ -185,10 +172,12 @@ ConvNeXt Functions ____________________________________________________________
 def train_convnext(model, train_loader, epochs, lr, device):
     optimizer = torch.optim.AdamW(model.parameters(), lr=lr)
     loss_fn = nn.CrossEntropyLoss()
+    
 
     dictionary = {}
     accuracy = 0
     recall = 0
+    specificity = 0
 
     for epoch in range(epochs):
         model.train()
@@ -253,7 +242,7 @@ def test_convnext(model, test_loader, device):
     return dictionary
 
 def train_test_convnext(path, num_classes, device, transform, batch_size, epochs, lr):
-    convnext_model = ConvNeXtModel(num_classes).to(device)
+    convnext_model = ConvNeXtTiny(num_classes).to(device)
 
     train_dataset = datasets.ImageFolder(f'../cross_splitted/{path}/train', transform=transform)
     test_dataset = datasets.ImageFolder(f'../cross_splitted/{path}/test', transform=transform)
@@ -261,8 +250,8 @@ def train_test_convnext(path, num_classes, device, transform, batch_size, epochs
     test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
 
     dictionary = {}
-    dictionary['train'] = train_convnext(convnext_model, train_loader, epochs=epochs, lr=lr, device=device)
-    dictionary['test'] = test_convnext(convnext_model, test_loader, device=device)
+    dictionary['train'] = train_convnext(convnext_model, train_loader=train_loader, epochs=epochs, lr=lr, device=device)
+    dictionary['test'] = test_convnext(convnext_model, test_loader=test_loader, device=device)
 
     return dictionary
 
@@ -270,36 +259,18 @@ def cross_validate_convnext(k):
     NUM_CLASSES = 5
     LR = 0.0001  
     BATCH_SIZE = 32  
-    EPOCHS = 2
+    EPOCHS = 10
     DEVICE = 'cuda' if torch.cuda.is_available() else 'cpu'
     print(f'Using device {DEVICE} for ConvNeXt')
 
-    transform = transforms.Compose
-    (
-        [
-            transforms.Resize((224, 224)),
-            transforms.ToTensor(),
-        ]
-    )
+    transform = transforms.Compose([transforms.Resize((224, 224)), transforms.ToTensor()])
 
 
     values = []
-    for i in range(1, 6):
+    for i in range(1, k+1):
         print(f'\nTraining and Testing fold #{i}')
-        values.append
-        (
-            train_test_convnext
-            (
-                path=f'fold_{i}',
-                num_classes=NUM_CLASSES,
-                device=DEVICE,
-                transform=transform,
-                batch_size=BATCH_SIZE,
-                epochs=EPOCHS,
-                lr=LR
-            )
-        )
-
+        value = train_test_convnext(path=f'fold_{i}', num_classes=NUM_CLASSES, device=DEVICE, transform=transform, batch_size=BATCH_SIZE, epochs=EPOCHS, lr=LR)
+        values.append(value)
 
     metrics = ['accuracy', 'recall', 'specificity']
 
@@ -307,7 +278,7 @@ def cross_validate_convnext(k):
     average_test = [0] * len(metrics)
 
     for j in range(len(metrics)):
-        for i in range(len(values)):    
+        for i in range(len(values)):
             average_train[j] += values[i]['train'][metrics[j]]
             average_test[j] += values[i]['test'][metrics[j]]
         average_train[j] /= k
@@ -320,7 +291,8 @@ Execution
 '''
 
 def main():
-    cross_validate_vit(k=1)
+    # cross_validate_vit(k=5)
+    cross_validate_convnext(k=1)
 
 
 if __name__ == "__main__":
