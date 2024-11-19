@@ -2,14 +2,14 @@ import csv
 
 def write_cv_metrics(metrics, model):
     with open(f'../results/cv_{model}_metrics.csv', 'w', newline='') as csvfile:
-        fieldnames = ['fold', 'mode', 'accuracy', 'specificity', 'sensitivity']
+        fieldnames = ['fold', 'mode', 'accuracy', 'sensitivity', 'specificity']
         writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
         writer.writeheader()
         writer.writerows(metrics)
 
 def write_final_results(metrics, model):
     with open(f'../results/{model}_final_results.csv', 'w', newline='') as csvfile:
-        fieldnames = ['mode', 'accuracy', 'specificity', 'sensitivity']
+        fieldnames = ['mode', 'accuracy', 'sensitivity', 'specificity']
         writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
         writer.writeheader()
         writer.writerows(metrics)

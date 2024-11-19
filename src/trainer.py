@@ -1,6 +1,7 @@
 import torch
 import torchvision
 import numpy as np
+import time
 
 from torch import nn
 from torch.utils.data import DataLoader
@@ -12,7 +13,7 @@ from tqdm import tqdm
 
 from vit import VitBase16
 from convnext import ConvNeXtTiny
-
+from csv_writer import write_cv_metrics, write_final_results, write_confusion_matrix
 
 '''
 General Functions __________________________________________________________
@@ -93,9 +94,9 @@ ConvNeXt Functions ____________________________________________________________
 '''
 
 def train_convnext(model, train_loader, epochs, lr, device):
+    model.train()
     optimizer = torch.optim.AdamW(model.parameters(), lr=lr)
     loss_fn = nn.CrossEntropyLoss()
-    
 
     dictionary = {}
     accuracy = 0
@@ -103,7 +104,6 @@ def train_convnext(model, train_loader, epochs, lr, device):
     specificity = 0
 
     for epoch in range(epochs):
-        model.train()
         running_loss = 0.0
         all_preds = []
         all_labels = []
@@ -174,16 +174,44 @@ def train_test_convnext(path, num_classes, device, transform, batch_size, epochs
     test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
 
     dictionary = {}
+
+    start_time = time.time()
     dictionary['train'] = train_convnext(convnext_model, train_loader=train_loader, epochs=epochs, lr=lr, device=device)
+    end_time = time.time()
+    elapsed_time = end_time - start_time
+    print(f'Training for fold {path} completed in {elapsed_time:.2f} seconds.')
+
     dictionary['test'] = test_convnext(convnext_model, test_loader=test_loader, device=device)
 
     return dictionary
+
+def write_values(values, model):
+    # metrics = ['accuracy', 'recall', 'specificity']
+
+    results = []
+    results.append({'fold':'1', 'mode':'train', 'accuracy':values[0]['train']['accuracy'], 'sensitivity':values[0]['train']['recall'], 'specificity':values[0]['train']['specificity']})
+    results.append({'fold':'1', 'mode':'test', 'accuracy':values[0]['test']['accuracy'], 'sensitivity':values[0]['test']['recall'], 'specificity':values[0]['test']['specificity']})
+
+    results.append({'fold':'2', 'mode':'train', 'accuracy':values[1]['train']['accuracy'], 'sensitivity':values[1]['train']['recall'], 'specificity':values[1]['train']['specificity']})
+    results.append({'fold':'2', 'mode':'test', 'accuracy':values[1]['test']['accuracy'], 'sensitivity':values[1]['test']['recall'], 'specificity':values[1]['test']['specificity']})
+
+    results.append({'fold':'3', 'mode':'train', 'accuracy':values[2]['train']['accuracy'], 'sensitivity':values[2]['train']['recall'], 'specificity':values[2]['train']['specificity']})
+    results.append({'fold':'3', 'mode':'test', 'accuracy':values[2]['test']['accuracy'], 'sensitivity':values[2]['test']['recall'], 'specificity':values[2]['test']['specificity']})
+
+    results.append({'fold':'4', 'mode':'train', 'accuracy':values[3]['train']['accuracy'], 'sensitivity':values[3]['train']['recall'], 'specificity':values[3]['train']['specificity']})
+    results.append({'fold':'4', 'mode':'test', 'accuracy':values[3]['test']['accuracy'], 'sensitivity':values[3]['test']['recall'], 'specificity':values[3]['test']['specificity']})
+
+    results.append({'fold':'5', 'mode':'train', 'accuracy':values[4]['train']['accuracy'], 'sensitivity':values[4]['train']['recall'], 'specificity':values[4]['train']['specificity']})
+    results.append({'fold':'5', 'mode':'test', 'accuracy':values[4]['test']['accuracy'], 'sensitivity':values[4]['test']['recall'], 'specificity':values[4]['test']['specificity']})
+
+    write_cv_metrics(results, model)
+
 
 def cross_validate_convnext(k):
     NUM_CLASSES = 5
     LR = 0.0001  
     BATCH_SIZE = 32  
-    EPOCHS = 10
+    EPOCHS = 5
     DEVICE = 'cuda' if torch.cuda.is_available() else 'cpu'
     print(f'Using device {DEVICE} for ConvNeXt')
 
@@ -195,6 +223,8 @@ def cross_validate_convnext(k):
         print(f'\nTraining and Testing fold #{i}')
         value = train_test_convnext(path=f'fold_{i}', num_classes=NUM_CLASSES, device=DEVICE, transform=transform, batch_size=BATCH_SIZE, epochs=EPOCHS, lr=LR)
         values.append(value)
+
+    write_values(values, 'convnext')
 
     metrics = ['accuracy', 'recall', 'specificity']
 
@@ -210,13 +240,28 @@ def cross_validate_convnext(k):
         print(f'\nAverage {metrics[j]} for training: {average_train[j]}')
         print(f'\nAverage {metrics[j]} for testing: {average_test[j]}')
 
+def normal_execution():
+    NUM_CLASSES = 5
+    LR = 0.0001  
+    BATCH_SIZE = 32  
+    EPOCHS = 5
+    DEVICE = 'cuda' if torch.cuda.is_available() else 'cpu'
+    print(f'Using device {DEVICE} for ConvNeXt')
+
+    transform = transforms.Compose([transforms.Resize((224, 224)), transforms.ToTensor()])
+
+    value = train_test_convnext(path=f'fold_{2}', num_classes=NUM_CLASSES, device=DEVICE, transform=transform, batch_size=BATCH_SIZE, epochs=EPOCHS, lr=LR)
+
+    print(value)
+
 '''
 Execution
 '''
 
 def main():
     # cross_validate_vit(k=5)
-    cross_validate_convnext(k=1)
+    # cross_validate_convnext(k=5)
+    normal_execution()
 
 
 if __name__ == "__main__":
