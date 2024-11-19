@@ -1,14 +1,14 @@
 import torch
 import torchvision
 import numpy as np
-import csv
 
-from sklearn.metrics import confusion_matrix
+from torch import nn
 from torch.utils.data import DataLoader
 from torchvision import datasets, transforms
-from torch import nn
+from sklearn.metrics import confusion_matrix
 from sklearn.metrics import accuracy_score
 from sklearn.metrics import recall_score
+from tqdm import tqdm
 
 from vit import VitBase16
 from convnext import ConvNeXtTiny
@@ -31,84 +31,9 @@ def macro_specificity_score(y_true, y_pred):
     macro_specificity = np.mean(specificity_per_class)
     return macro_specificity
 
-def append_results_to_csv(file_path, k, y_true, y_pred):
-    with open(file_path, mode='a', newline='') as file:
-        writer = csv.writer(file)
-        
-        for true_value, pred_value in zip(y_true, y_pred):
-            writer.writerow([k, true_value, pred_value])
-
 '''
 ViT Functions _______________________________________________________________
 '''
-
-def train_vit(model, train_loader, epochs, lr, device):
-    model.train()
-    optimizer = torch.optim.AdamW(model.parameters(), lr=lr)
-    loss_fn = nn.CrossEntropyLoss()
-    
-    dictionary = {}
-
-    for epoch in range(epochs):
-        running_loss = 0.0
-        all_preds = []
-        all_labels = []
-
-        for images, labels in train_loader:
-            images, labels = images.to(device), labels.to(device)
-            optimizer.zero_grad()
-            outputs = model(images)
-            loss = loss_fn(outputs, labels)
-            loss.backward()
-            optimizer.step()
-            running_loss += loss.item()
-
-            preds = torch.argmax(outputs, dim=1)
-            all_preds.extend(preds.cpu().numpy())
-            all_labels.extend(labels.cpu().numpy())
-        
-        accuracy = accuracy_score(all_labels, all_preds)
-        recall = recall_score(all_labels, all_preds, average='macro')
-        specificity = macro_specificity_score(all_labels, all_preds)
-
-        print(f'Epoch [{epoch+1}/{epochs}], Loss: {running_loss/len(train_loader):.4f}')
-        print(f'\tAccuracy: {accuracy*100:.2f}%')
-        print(f'\tRecall: {recall*100:.2f}%')
-        print(f'\tSpecificity: {specificity*100:.2f}%')
-
-    dictionary['accuracy'] = accuracy
-    dictionary['recall'] = recall
-    dictionary['specificity'] = specificity
-
-    return dictionary, all_preds, all_labels
-
-def test_vit(model, test_loader, device):
-    model.eval()
-    all_preds = []
-    all_labels = []
-    dictionary = {}
-
-    with torch.no_grad():
-        for images, labels in test_loader:
-            images, labels = images.to(device), labels.to(device)
-            outputs = model(images)
-            preds = torch.argmax(outputs, dim=1)
-            all_preds.extend(preds.cpu().numpy())
-            all_labels.extend(labels.cpu().numpy())
-    
-    accuracy = accuracy_score(all_labels, all_preds)
-    recall = recall_score(all_labels, all_preds, average='macro')
-    specificity = macro_specificity_score(all_labels, all_preds)
-
-    print(f'Test Accuracy: {accuracy * 100:.2f}%')
-    print(f'Test Recall: {recall * 100:.2f}%')
-    print(f'Test Specificity: {specificity * 100:.2f}%')
-
-    dictionary['accuracy'] = accuracy
-    dictionary['recall'] = recall
-    dictionary['specificity'] = specificity
-    
-    return dictionary, all_preds, all_labels
 
 def train_test_vit(path, num_classes, device, transform, batch_size, epochs, lr, k):
     vit_model = VitBase16(num_classes=num_classes, device=device).to(device)
@@ -119,11 +44,9 @@ def train_test_vit(path, num_classes, device, transform, batch_size, epochs, lr,
     test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
 
     dictionary = {}
-    dictionary['train'], all_preds, all_labels = train_vit(vit_model, train_loader, device=device, epochs=epochs, lr=lr)
-    append_results_to_csv('../results/vit_training.csv', k, all_labels, all_preds)
-
-    dictionary['test'], all_preds, all_labels = test_vit(vit_model, test_loader, device=device)
-    append_results_to_csv('../results/vit_testing.csv', k, all_labels, all_preds)
+    # TODO(Luis): come back and fix
+    # dictionary['train'], all_preds, all_labels = train_vit(vit_model, train_loader, device=device, epochs=epochs, lr=lr)
+    # cdictionary['test'], all_preds, all_labels = test_vit(vit_model, test_loader, device=device)
 
     return dictionary
 
@@ -185,7 +108,7 @@ def train_convnext(model, train_loader, epochs, lr, device):
         all_preds = []
         all_labels = []
         
-        for images, labels in train_loader:
+        for batch_index, (images, labels) in enumerate(tqdm(train_loader)):
             images, labels = images.to(device), labels.to(device)
             optimizer.zero_grad()
             outputs = model(images)
@@ -202,10 +125,11 @@ def train_convnext(model, train_loader, epochs, lr, device):
         recall = recall_score(all_labels, all_preds, average='macro')
         specificity = macro_specificity_score(all_labels, all_preds)
 
-        print(f'Epoch [{epoch+1}/{epochs}], Loss: {running_loss/len(train_loader):.4f}')
+        print(f'\tEpoch [{epoch+1}/{epochs}]')
+        print(f'Loss: {running_loss/len(train_loader):.4f}')
         print(f'\tAccuracy: {accuracy*100:.2f}%')
         print(f'\tRecall: {recall*100:.2f}%')
-        print(f'Specificity: {specificity*100:.2f}%')
+        print(f'\tSpecificity: {specificity*100:.2f}%')
 
     dictionary['accuracy'] = accuracy
     dictionary['recall'] = recall
