@@ -3,9 +3,9 @@ kvasir-dataset-v2.zip
 data
 split_data
 cross_splitted
-results/
 
 src/dummy.py
+src/trainer_but.py
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

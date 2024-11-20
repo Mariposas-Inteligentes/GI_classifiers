@@ -9,28 +9,12 @@ from torchvision import datasets, transforms
 from sklearn.metrics import confusion_matrix
 from sklearn.metrics import accuracy_score
 from sklearn.metrics import recall_score
+from imblearn.metrics import specificity_score
 from tqdm import tqdm
 
 from vit import VitBase16
 from convnext import ConvNeXtTiny
 from csv_writer import write_cv_metrics, write_final_results, write_confusion_matrix
-
-'''
-General Functions __________________________________________________________
-'''
-
-def macro_specificity_score(y_true, y_pred):
-    matrix = confusion_matrix(y_true, y_pred)
-    specificity_per_class = []
-
-    for i in range(len(matrix)):
-        tn = np.sum(np.delete(np.delete(matrix, i, axis=0), i, axis=1))
-        fp = np.sum(matrix[:, i]) - matrix[i, i]
-        specificity = tn / (tn + fp)
-        specificity_per_class.append(specificity)
-
-    macro_specificity = np.mean(specificity_per_class)
-    return macro_specificity
 
 '''
 ViT Functions _______________________________________________________________
@@ -102,6 +86,7 @@ def train_convnext(model, train_loader, epochs, lr, device):
     accuracy = 0
     recall = 0
     specificity = 0
+    matrix = None
 
     for epoch in range(epochs):
         running_loss = 0.0
@@ -123,10 +108,11 @@ def train_convnext(model, train_loader, epochs, lr, device):
         
         accuracy = accuracy_score(all_labels, all_preds)
         recall = recall_score(all_labels, all_preds, average='macro')
-        specificity = macro_specificity_score(all_labels, all_preds)
+        specificity = specificity_score(all_labels, all_preds, average='macro')
+        matrix = confusion_matrix(all_labels, all_preds)
 
         print(f'\tEpoch [{epoch+1}/{epochs}]')
-        print(f'Loss: {running_loss/len(train_loader):.4f}')
+        print(f'\tLoss: {running_loss/len(train_loader):.4f}')
         print(f'\tAccuracy: {accuracy*100:.2f}%')
         print(f'\tRecall: {recall*100:.2f}%')
         print(f'\tSpecificity: {specificity*100:.2f}%')
@@ -135,14 +121,16 @@ def train_convnext(model, train_loader, epochs, lr, device):
     dictionary['recall'] = recall
     dictionary['specificity'] = specificity
 
-    return dictionary
+
+    return dictionary, matrix
 
 def test_convnext(model, test_loader, device):
     model.eval()
     all_preds = []
     all_labels = []
     dictionary = {}
-    
+    matrix = None
+
     with torch.no_grad():
         for images, labels in test_loader:
             images, labels = images.to(device), labels.to(device)
@@ -153,7 +141,8 @@ def test_convnext(model, test_loader, device):
     
     accuracy = accuracy_score(all_labels, all_preds)
     recall = recall_score(all_labels, all_preds, average='macro')
-    specificity = macro_specificity_score(all_labels, all_preds)
+    specificity = specificity_score(all_labels, all_preds, average='macro')
+    matrix = confusion_matrix(all_labels, all_preds)
 
     print(f'Test Accuracy: {accuracy * 100:.2f}%')
     print(f'Test Recall: {recall * 100:.2f}%')
@@ -163,9 +152,9 @@ def test_convnext(model, test_loader, device):
     dictionary['recall'] = recall
     dictionary['specificity'] = specificity
 
-    return dictionary
+    return dictionary, matrix
 
-def train_test_convnext(path, num_classes, device, transform, batch_size, epochs, lr):
+def train_test_convnext(path, num_classes, device, transform, batch_size, epochs, lr, save_matrix=False):
     convnext_model = ConvNeXtTiny(num_classes).to(device)
 
     train_dataset = datasets.ImageFolder(f'../cross_splitted/{path}/train', transform=transform)
@@ -176,18 +165,24 @@ def train_test_convnext(path, num_classes, device, transform, batch_size, epochs
     dictionary = {}
 
     start_time = time.time()
-    dictionary['train'] = train_convnext(convnext_model, train_loader=train_loader, epochs=epochs, lr=lr, device=device)
+    dictionary['train'], train_matrix = train_convnext(convnext_model, train_loader=train_loader, epochs=epochs, lr=lr, device=device)
     end_time = time.time()
     elapsed_time = end_time - start_time
     print(f'Training for fold {path} completed in {elapsed_time:.2f} seconds.')
 
-    dictionary['test'] = test_convnext(convnext_model, test_loader=test_loader, device=device)
+    dictionary['test'], test_matrix = test_convnext(convnext_model, test_loader=test_loader, device=device)
+
+    if save_matrix:
+
+        print(train_matrix)
+        print(test_matrix)
+
+        write_confusion_matrix('convnext_train', train_matrix)
+        write_confusion_matrix('convnext_test', test_matrix)
 
     return dictionary
 
-def write_values(values, model):
-    # metrics = ['accuracy', 'recall', 'specificity']
-
+def write_cv_values(values, model):
     results = []
     results.append({'fold':'1', 'mode':'train', 'accuracy':values[0]['train']['accuracy'], 'sensitivity':values[0]['train']['recall'], 'specificity':values[0]['train']['specificity']})
     results.append({'fold':'1', 'mode':'test', 'accuracy':values[0]['test']['accuracy'], 'sensitivity':values[0]['test']['recall'], 'specificity':values[0]['test']['specificity']})
@@ -206,17 +201,21 @@ def write_values(values, model):
 
     write_cv_metrics(results, model)
 
+def write_final_values(values, model):
+    results = []
+    results.append({'mode':'train', 'accuracy':values['train']['accuracy'], 'sensitivity':values['train']['recall'], 'specificity':values['train']['specificity']})
+    results.append({'mode':'test', 'accuracy':values['test']['accuracy'], 'sensitivity':values['test']['recall'], 'specificity':values['test']['specificity']})
+    write_final_results(results, model)
 
 def cross_validate_convnext(k):
     NUM_CLASSES = 5
-    LR = 0.0001  
+    LR = 0.00001  
     BATCH_SIZE = 32  
-    EPOCHS = 5
+    EPOCHS = 8
     DEVICE = 'cuda' if torch.cuda.is_available() else 'cpu'
     print(f'Using device {DEVICE} for ConvNeXt')
 
     transform = transforms.Compose([transforms.Resize((224, 224)), transforms.ToTensor()])
-
 
     values = []
     for i in range(1, k+1):
@@ -224,7 +223,7 @@ def cross_validate_convnext(k):
         value = train_test_convnext(path=f'fold_{i}', num_classes=NUM_CLASSES, device=DEVICE, transform=transform, batch_size=BATCH_SIZE, epochs=EPOCHS, lr=LR)
         values.append(value)
 
-    write_values(values, 'convnext')
+    write_cv_values(values, 'convnext')
 
     metrics = ['accuracy', 'recall', 'specificity']
 
@@ -242,17 +241,17 @@ def cross_validate_convnext(k):
 
 def normal_execution():
     NUM_CLASSES = 5
-    LR = 0.0001  
+    LR = 0.00001 
     BATCH_SIZE = 32  
-    EPOCHS = 5
+    EPOCHS = 8
     DEVICE = 'cuda' if torch.cuda.is_available() else 'cpu'
     print(f'Using device {DEVICE} for ConvNeXt')
 
     transform = transforms.Compose([transforms.Resize((224, 224)), transforms.ToTensor()])
 
-    value = train_test_convnext(path=f'fold_{2}', num_classes=NUM_CLASSES, device=DEVICE, transform=transform, batch_size=BATCH_SIZE, epochs=EPOCHS, lr=LR)
-
-    print(value)
+    values = train_test_convnext(path=f'fold_{2}', num_classes=NUM_CLASSES, device=DEVICE, transform=transform, batch_size=BATCH_SIZE, epochs=EPOCHS, lr=LR, save_matrix=True)
+    write_final_values(values, 'convnext')
+    
 
 '''
 Execution
@@ -260,8 +259,8 @@ Execution
 
 def main():
     # cross_validate_vit(k=5)
-    # cross_validate_convnext(k=5)
-    normal_execution()
+    cross_validate_convnext(k=5)
+    # normal_execution()
 
 
 if __name__ == "__main__":
