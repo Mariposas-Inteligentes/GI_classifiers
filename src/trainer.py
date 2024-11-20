@@ -249,7 +249,7 @@ def normal_execution():
 
     transform = transforms.Compose([transforms.Resize((224, 224)), transforms.ToTensor()])
 
-    values = train_test_convnext(path=f'fold_{2}', num_classes=NUM_CLASSES, device=DEVICE, transform=transform, batch_size=BATCH_SIZE, epochs=EPOCHS, lr=LR, save_matrix=True)
+    values = train_test_convnext(path=f'fold_{4}', num_classes=NUM_CLASSES, device=DEVICE, transform=transform, batch_size=BATCH_SIZE, epochs=EPOCHS, lr=LR, save_matrix=True)
     write_final_values(values, 'convnext')
     
 
@@ -259,8 +259,8 @@ Execution
 
 def main():
     # cross_validate_vit(k=5)
-    cross_validate_convnext(k=5)
-    # normal_execution()
+    # cross_validate_convnext(k=5)
+    normal_execution()
 
 
 if __name__ == "__main__":
