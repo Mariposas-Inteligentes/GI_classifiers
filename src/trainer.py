@@ -303,8 +303,8 @@ Execution ______________________________________________________________________
 def main():
     # cross_validate_vit(k=5)
     # cross_validate_convnext(k=5)
-    # normal_convnext_execution()
-    normal_vit_execution()
+    normal_convnext_execution()
+    # normal_vit_execution()
 
 
 if __name__ == "__main__":
